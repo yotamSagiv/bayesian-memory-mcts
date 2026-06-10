@@ -1,96 +1,51 @@
-# Bayesian Memory MCTS
+# Bayesian Memory MCTS for Chess
 
-This is a compact research prototype for memory-augmented Monte Carlo Tree
-Search in chess. It combines Bayesian action-value estimates, value of
-information search control, Thompson sampling, and episodic memory traces.
+This repo contains code for a project that integrates (episodic) memory into planning.
+The goals of this model are:
 
-The code here is the cleaned canonical subset of a larger exploratory workspace.
-It is intended to be readable and runnable, not a general-purpose chess engine or
-installable library.
+1) Improve search efficiency by using memory to bias search to historically-promising areas
+of the solution landscape.
+2) In accordance with empirical data on human chess play, reduce move times in positions
+with high previous experience.
 
-## Core Idea
+Broadly speaking, the way this occurs by initializing the value of a node, once it is expanded
+based on historical value outcomes in similar positions. Unlike traditional MCTS, here
+search is terminated on the basis of expected value of computation; when the next rollout
+is not expected to be very valuable, search ends. 
 
-Each child node stores a Dirichlet posterior over three outcomes: win, draw, and
-loss. The search derives an action value from that posterior as:
+In particular, the current implementation combines:
 
-```text
-Q = P(win) - P(loss)
-```
+- Bayesian action values represented as Dirichlet counts over win/draw/loss.
+- Value-of-information search control using a truncated-normal approximation.
+- Optional Thompson sampling over the Dirichlet posterior.
+- Episodic memory traces that can encode outcome, recency, and criticality.
+- Lightweight MCTS-solver propagation for proven terminal outcomes.
 
-Search can select actions by either:
+## Main Files
 
-- sampling from the Dirichlet posterior with Thompson sampling, or
-- scoring actions by posterior mean plus a value-of-perfect-information term.
-
-After search, expanded tree values are consolidated with a minimax backup pass.
-This keeps computation allocation separate from final move choice: VPI can spend
-rollouts where information is valuable, while the selected move is based on the
-game-theoretic value currently represented in the tree.
-
-Episodic memory initializes child-node outcome counts when the search revisits a
-known position. Memory traces can also encode criticality and recency.
-
-## Files
-
-- `mcts.py`: Bayesian MCTS loop, VPI calculation, Thompson sampling, and solver
-  propagation.
-- `node.py`: Dirichlet node state and posterior updates.
+- `mcts.py`: Bayesian MCTS search loop, VPI calculation, Thompson sampling, and
+  solver propagation.
+- `node.py`: Dirichlet node state, posterior mean/variance, count updates, and
+  certainty forcing.
 - `memory.py`: episodic memory store with criticality, decay, and forgetting.
-- `game_state.py`: `bulletchess` wrapper for the search-state interface.
-- `heuristics.py`: rollout policies for chess.
-- `experiment_runner.py`: small batch experiment over mate puzzles.
-- `demo.py`: fast demonstration on a mate-in-3 position with injected memory.
-- `tests/`: unit and integration tests.
+- `game_state.py`: `bulletchess` wrapper implementing the search-state API.
+- `heuristics.py`: chess rollout policies used by experiments.
+- `experiment_runner.py`: batch experiments over mate puzzles and memory levels.
 
-## Setup
+## Environment
 
-The local environment used during development is:
-
-```bash
-/opt/miniconda3/envs/chess13/bin/python
-```
-
-For a fresh environment:
+Install dependencies in a fresh environment with:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-## Quick Run
+`bulletchess` is required for the chess wrapper and experiments.
 
-```bash
-python demo.py
-```
+## Main Experiment
 
-Expected behavior: the model selects `h5g6` as the root move in the included
-mate-in-3 position.
+Run the batch mate-puzzle experiment with experiment_runner.py.
 
-## Tests
-
-From this directory:
-
-```bash
-python -m unittest discover -s tests
-```
-
-Current local baseline under `/opt/miniconda3/envs/chess13/bin/python`: all
-tests pass.
-
-## Experiment
-
-```bash
-python experiment_runner.py
-```
-
-The default settings are intentionally small so the script can run as a quick
-smoke test. Increase `MEMORY_LEVELS`, `MAX_SIMS`, and `REPEATS` at the bottom of
-`experiment_runner.py` for larger sweeps.
-
-## Notes
-
-This upload excludes older prototypes, debug scripts, generated visualizations,
-notebooks, cached bytecode, and local IDE metadata.
-
-## License
-
-Licensed under GPL-3.0-or-later. See `LICENSE`.
+The default configuration runs many repeats and may take a while. For a quick
+demo, reduce `REPEATS`, `MAX_SIMS`, or `MEMORY_LEVELS` at the bottom of
+`experiment_runner.py`.
